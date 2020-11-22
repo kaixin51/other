@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="css/ol.css">
+    <script type="text/javascript" src="js/jquery.3.5.1.js"></script>
+    <script type="text/javascript" src="js/ol.js"></script>
+</head>
+<body>
+<div id="map" style="width: 100%;height: 500px;"></div>
+</body>
+<script>
+    let key = '38714c443b01bbf3f85d0c036e7c6411'
+    let animateCanvas;
+    const projection = ol.proj.get('EPSG:4326')
+    const projectionExtent = projection.getExtent()
+    const res = [
+        1.40625,
+        0.703125,
+        0.3515625,
+        0.17578125,
+        0.087890625,
+        0.0439453125,
+        0.02197265625,
+        0.010986328125,
+        0.0054931640625,
+        0.00274658203125,
+        0.001373291015625,
+        0.0006866455078125,
+        0.00034332275390625,
+        0.000171661376953125,
+        0.0000858306884765625,
+        0.00004291534423828125,
+        0.000021457672119140625,
+        0.000010728836059570312,
+        0.000005364418029785156,
+        0.000002682209014892578,
+        0.000001341104507446289
+    ]
+    const matrixIds = [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+    ]
+    var map = new ol.Map({
+        target: 'map',
+        controls: ol.control.defaults({
+            attribution: false,
+            zoom: false,
+            rotate: false
+        }),
+        view: new ol.View({
+            projection: projection, // 使用这个坐标系
+            center: [121.419383, 28.661179], // 浙江
+            zoom: 10,
+            minZoom: 2,
+            maxZoom: 18,
+            extent: [-180, -90, 180, 90]
+        })
+    })
+
+    var tdtVectorLayer = new ol.layer.Tile({
+        minResolution: 0.000001341104507446289,
+        maxResolution: 1.40625,
+        visible: false,
+        source: new ol.source.WMTS({
+            crossOrigin: 'anonymous',
+            name: '天地图矢量',
+            url: 'http://t{0-7}.tianditu.gov.cn/vec_c/wmts?tk=' + key,
+            layer: 'vec',
+            style: 'default',
+            matrixSet: 'c',
+            format: 'tiles',
+            wrapX: true,
+            tileGrid: new ol.tilegrid.WMTS({
+                origin: ol.extent.getTopLeft(projectionExtent),
+                resolutions: res.slice(0, 20),
+                matrixIds: matrixIds
+            })
+        })
+    })
+
+    var tdtImgLayer = new ol.layer.Tile({
+        minResolution: 0.000001341104507446289,
+        maxResolution: 1.40625,
+        source: new ol.source.WMTS({
+            crossOrigin: 'anonymous',
+            name: '天地图矢量',
+            url: 'http://t{0-7}.tianditu.gov.cn/img_c/wmts?tk=' + key,
+            layer: 'img',
+            style: 'default',
+            matrixSet: 'c',
+            format: 'tiles',
+            wrapX: true,
+            tileGrid: new ol.tilegrid.WMTS({
+                origin: ol.extent.getTopLeft(projectionExtent),
+                resolutions: res.slice(0, 20),
+                matrixIds: matrixIds
+            })
+        })
+    })
+
+    var lineStrings = []
+
+    var baseLayerGroup = new ol.layer.Group({
+        layers: [tdtImgLayer, tdtVectorLayer]
+    })
+    map.addLayer(baseLayerGroup)
+
+    var source = new ol.source.Vector({
+        warpX: false
+    })
+    var vector = new ol.layer.Vector({
+        source: source,
+    })
+    map.addLayer(vector)
+    var format = new ol.format.GeoJSON()
+    $.ajax({
+        url: 'json/lines.json',
+        type: 'get',
+        dataType: 'json',
+        async: false,
+        success: function (result) {
+            let features = format.readFeatures(result)
+            source.addFeatures(features)
+            features.forEach(element => {
+                lineStrings.push({
+                    geom:element.getGeometry(),
+                    length:formatLength(element.getGeometry()),
+                })
+            })
+        }
+    })
+
+
+    let canvasLayer;
+    getCanvasLayer()
+    let isAnminate = false
+    var timer;
+    function getCanvasLayer(features) {
+        var canvasOption = new Object();
+
+        canvasOption.ratio = 1;//参考api，ratio设置为1时，canvas的画布整体大小为初始化时map所对应的窗口。
+        canvasOption.canvasFunction = function (extent, resolution, pixelRatio, size, projection) {
+            console.log("改变")
+            if (!animateCanvas) {
+                animateCanvas = document.createElement('canvas');
+            }
+
+            animateCanvas.width = size[0] * pixelRatio;
+            animateCanvas.height = size[1] * pixelRatio;
+            animateCanvas.style.width = size[0] * pixelRatio + 'px';
+            animateCanvas.style.height = size[1] * pixelRatio + 'px';
+            var ctx = animateCanvas.getContext('2d')
+            ctx.scale(pixelRatio, pixelRatio);
+            if(!isAnminate){
+                drawFrame()
+                isAnminate = true
+            }
+
+            function drawFrame() {
+                timer = requestAnimationFrame(drawFrame);
+                render()
+            }
+
+            function render(){
+                ctx.clearRect(0,0,size[0],size[1]);
+                $.each(lineStrings,function(index,linestring){
+                    ctx.beginPath();
+
+                    var scale = timer/linestring.length
+                    scale = timer/(linestring.length/10)-Math.trunc(timer/(linestring.length/10))
+
+                    var lnglat = linestring.geom.getCoordinateAt(scale);
+                    lnglat = map.getPixelFromCoordinate(lnglat);
+                    var grad=ctx.createRadialGradient(lnglat[0],lnglat[1],0.4,lnglat[0],lnglat[1],5) //创建一个渐变色线性对象
+                    grad.addColorStop(0,"#fff");                  //定义渐变色颜色
+                    grad.addColorStop(1,"rgba(68, 165, 255, 0.3)");
+                    ctx.fillStyle=grad;
+                    ctx.arc(lnglat[0], lnglat[1], 4, 0, Math.PI * 2, true);
+                    ctx.fill();
+                    ctx.closePath();
+                })
+                map.render()
+            }
+
+            return animateCanvas
+        };
+        //为ImageCanvasLayer创建数据源
+        var canvasSource = new ol.source.ImageCanvas(canvasOption);
+        //创建一个ImageCanvasLayer图层
+        canvasLayer = new ol.layer.Image({
+            source: canvasSource,
+            zIndex: 600
+        });
+        map.addLayer(canvasLayer);
+    }
+
+
+    var global = typeof window === 'undefined' ? {} : window;
+    var requestAnimationFrame = global.requestAnimationFrame || global.mozRequestAnimationFrame || global.webkitRequestAnimationFrame || global.msRequestAnimationFrame || function (callback) {
+        return global.setTimeout(callback, 1000 / 60);
+    };
+
+    function closeFrame() {
+        cancelAnimationFrame(timer)
+    }
+
+    function formatLength(line) {
+        var sourceProj = this.map.getView().getProjection() // 获取投影坐标系
+        var length = ol.sphere.getLength(line, {
+            projection: sourceProj
+        })
+        return Math.trunc(length)+1
+    }
+
+
+
+</script>
+</html>

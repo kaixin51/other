@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script type="text/javascript"
+            src="https://webapi.amap.com/maps?v=2.0&key=cae22112bdf75143ddd83395ae84fc3a&plugin=AMap.GeoJSON"></script>
+    <script type="text/javascript" src="js/jquery.3.5.1.js"></script>
+</head>
+<body>
+<div id="map" style="width: 100%;height:500px;"></div>
+</body>
+<script>
+    var map = new AMap.Map('map', {
+        zoom: 16,//级别
+        center: [119.9494600, 29.3449200],//中心点坐标
+        viewMode: '2D'//使用3D视图
+    });
+
+
+    let clusterLayer;
+
+    $.ajax({
+        url: 'json/pool.json',
+        type: 'get',
+        dataType: 'json',
+        success: function (result) {
+            if (result.status === 0) {
+                let markers = [];
+                result.message.forEach(element => {
+                    if (element.longitude && element.latitude) {
+                        markers.push({
+                            lnglat: [element.longitude, element.latitude], // 点的经纬度
+                            weight: 1, //权重高的将作为聚合的中心点
+                            entity: element
+                        })
+                    }
+                })
+                let icon = 'image/三角形.png'
+                let markerClusterOption = {
+                    gridSize: 100,// 聚合像素
+                    maxZoom: 16, //当大到该层级后不再聚合
+                    renderClusterMarker: function (data) { // 聚合点样式设置
+                        data.marker.setIcon(icon)
+                        if (data.count > 1) {
+                            data.marker.setLabel({
+                                content: data.count,
+                                direction: "right",
+                                // 在 direction 基础上的偏移量
+                                offset: [-20, -30]
+                            })
+                        }
+                        return data.marker
+                    },
+                    renderMarker: function (data) { // 非聚合点样式
+                        // 高德聚合图层中  非聚合点默认 setAnchor：top-left offset并不是（0,0）而是根据图片设置了一个特定的偏移，出现定位点不准确，请自行根据图片调整offset
+                        data.marker.setIcon(icon)
+                        if (data.data[0].entity.projectName === '测试1') {
+                            // console.log(data.marker)
+                            data.marker.setAnchor('top-left') // Anchor和offset 最好设置一下，不然点不在对应的位置，出现偏移
+                            data.marker.setOffset(new AMap.Pixel(0, -16))
+                            data.marker.setContent('<div class="marker-route"><div class="marker-title">' + data.data[0].entity.projectName + '</div><div><img class="breath_light" src="' + icon + '"/></div></div>')
+                            console.log(data.marker)
+                        } else {
+                            data.marker.setAnchor('top-left') // Anchor和offset 最好设置一下，不然点不在对应的位置，出现偏移
+                            data.marker.setOffset(new AMap.Pixel(0, 0))
+                            data.marker.setLabel({
+                                content: data.data[0].entity.projectName,
+                                direction: "right",
+                                // 在 direction 基础上的偏移量
+                                offset: [-20, -30]
+                            })
+                        }
+
+                        data.marker.setExtData(data.data[0].entity)
+                        return data.marker
+                    }
+                }
+                map.plugin(["AMap.MarkerClusterer"], function () {
+                    clusterLayer = new AMap.MarkerClusterer(map, markers, markerClusterOption);
+                });
+                // var marker = new AMap.Marker({
+                //     position: new AMap.LngLat(120.0830600, 29.2075300),
+                //     icon: 'image/三角形.png'
+                // })
+                // marker.setLabel({
+                //     content: '测试',
+                //     direction: "right",
+                //     // 在 direction 基础上的偏移量
+                //     offset: [-20, -30]
+                // })
+                // marker.setMap(map)
+                // console.log(marker)
+            }
+        }
+    })
+</script>
+<style>
+    .amap-marker-label {
+        border: none !important;
+        background-color: inherit !important;
+        color: black;
+    }
+
+    .marker-title {
+        color: black;
+        width: 100px;
+        height: 20px;
+        top:-32px;
+        font-size: 12px;
+        /*right:-40px;*/
+        /*position: absolute;*/
+    }
+
+    .breath_light {
+        opacity: 0.1; /* 不透明度 */
+        overflow: hidden; /* 背景色 */
+        /* margin: 25% auto; */ /* 外边距 */
+
+        /* IE10、Firefox and Opera，IE9以及更早的版本不支持 */
+        animation-name: breath; /* 动画名称 */
+        animation-duration: 700ms; /* 动画时长3秒 */
+        animation-timing-function: ease-in-out; /* 动画速度曲线：以低速开始和结束 */
+        animation-iteration-count: infinite; /* 播放次数：无限 */
+
+        /* Safari and Chrome */
+        -webkit-animation-name: breath; /* 动画名称 */
+        -webkit-animation-duration: 700ms; /* 动画时长3秒 */
+        -webkit-animation-timing-function: ease-in-out; /* 动画速度曲线：以低速开始和结束 */
+        -webkit-animation-iteration-count: infinite; /* 播放次数：无限 */
+    }
+
+    @keyframes breath {
+        from {
+            opacity: 0.1;
+        }
+        /* 动画开始时的不透明度 */
+        50% {
+            opacity: 1;
+        }
+        /* 动画50% 时的不透明度 */
+        to {
+            opacity: 0.1;
+        }
+        /* 动画结束时的不透明度 */
+    }
+
+    @-webkit-keyframes breath {
+        from {
+            opacity: 0.1;
+        }
+        /* 动画开始时的不透明度 */
+        50% {
+            opacity: 1;
+        }
+        /* 动画50% 时的不透明度 */
+        to {
+            opacity: 0.1;
+        }
+        /* 动画结束时的不透明度 */
+    }
+</style>
+</html>
